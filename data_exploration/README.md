@@ -37,6 +37,11 @@ The script is dependency-free and reports:
 
 The complete generated report is written to `data_exploration/output/DATA_EXPLORATION_REPORT.md`.
 
+For model-training work, use [FEATURE_TABLE.md](./FEATURE_TABLE.md) and
+[feature_catalog.csv](./feature_catalog.csv). The table documents raw GPS features,
+road-arc features, candidate-generation features, sequence features, preprocessing,
+and leakage-safe usage for the 80-trip training and 10-trip development partitions.
+
 ## Partition and leakage rules
 
 - Train only on `data/train`.
