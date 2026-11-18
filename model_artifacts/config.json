@@ -1,0 +1,145 @@
+{
+  "model_name": "LightGBM (Optuna Tuned)",
+  "algorithm_family": "Boosting (LightGBM)",
+  "pipeline_steps": [
+    "SimpleImputer(strategy='median')",
+    "LGBMClassifier"
+  ],
+  "hyperparameters": {
+    "n_estimators": 250,
+    "learning_rate": 0.02493706289899649,
+    "num_leaves": 112,
+    "max_depth": 11,
+    "min_child_samples": 28,
+    "subsample": 0.8119511080622462,
+    "colsample_bytree": 0.6162063567857179,
+    "reg_alpha": 0.0029737327411636567,
+    "reg_lambda": 0.3920031811155226,
+    "subsample_freq": 1,
+    "random_state": 42,
+    "n_jobs": -1,
+    "verbose": -1
+  },
+  "random_seed": 42,
+  "candidate_limit": 8,
+  "positive_class_label": 1,
+  "classes": [
+    0,
+    1
+  ],
+  "positive_class_index": 1,
+  "feature_count": 13,
+  "feature_columns": [
+    "timestamp_gap_s",
+    "step_distance_m",
+    "point_speed_mps",
+    "heading_deg",
+    "turn_angle_deg",
+    "perpendicular_distance_m",
+    "along_arc_fraction",
+    "arc_length_m",
+    "arc_bearing_deg",
+    "heading_delta_deg",
+    "arc_out_degree",
+    "arc_in_degree",
+    "candidate_rank"
+  ],
+  "excluded_columns": [
+    "trip_id",
+    "point_idx",
+    "arc_id",
+    "longitude",
+    "latitude",
+    "timestamp",
+    "label"
+  ],
+  "training_configuration": {
+    "dataset_path": "full_features/train_candidate_features_sample.csv",
+    "num_training_trips": 80,
+    "num_training_rows": 1667336,
+    "positive_label_count": 189983,
+    "negative_label_count": 1477353,
+    "positive_rate": 0.113944,
+    "feature_dtype": "float32",
+    "train_time_s": 8.906,
+    "trained_at": "2026-11-18 14:51:56"
+  },
+  "group_kfold_validation": {
+    "strategy": "GroupKFold",
+    "n_splits": 5,
+    "group_column": "trip_id",
+    "selection_metric": "cv_macro_f1_mean",
+    "untuned_baseline": {
+      "cv_macro_f1_mean": 0.8624,
+      "cv_macro_f1_std": 0.0409,
+      "cv_top1_mean": 0.7069,
+      "cv_top1_std": 0.1386,
+      "cv_log_loss_mean": 0.1447,
+      "cv_time_s": 27.2702
+    },
+    "selected_final": {
+      "cv_macro_f1_mean": 0.8692,
+      "cv_macro_f1_std": 0.0394,
+      "cv_top1_mean": 0.7128,
+      "cv_top1_std": 0.1408,
+      "cv_log_loss_mean": 0.1364
+    }
+  },
+  "optuna_tuning": {
+    "sampler": "TPESampler",
+    "seed": 42,
+    "objective": "maximize 5-fold GroupKFold CV macro F1 on 80 training trips",
+    "max_trials": 30,
+    "timeout_s": 900,
+    "completed_trials": 25,
+    "best_trial_number": 17,
+    "total_tuning_time_s": 934.38,
+    "trials_log_path": "model_experiments/optuna_trials.csv"
+  },
+  "student_test_evaluation_only": {
+    "note": "Reported for final comparison only; never used for fitting, tuning, or selection.",
+    "num_student_test_trips": 10,
+    "num_student_test_rows": 153280,
+    "untuned": {
+      "train_macro_f1": 0.9197,
+      "train_top1_acc": 0.7928,
+      "test_macro_f1": 0.8882,
+      "test_precision": 0.8938,
+      "test_recall": 0.8828,
+      "test_log_loss": 0.1117,
+      "test_top1_acc": 0.8111,
+      "test_route_continuity": 0.6979,
+      "train_time_s": 5.785,
+      "infer_time_s": 0.144
+    },
+    "selected_final": {
+      "train_macro_f1": 0.9276,
+      "train_top1_acc": 0.8045,
+      "test_macro_f1": 0.8925,
+      "test_precision": 0.9007,
+      "test_recall": 0.8848,
+      "test_log_loss": 0.1098,
+      "test_top1_acc": 0.8183,
+      "test_route_continuity": 0.698,
+      "train_time_s": 8.906,
+      "infer_time_s": 0.358
+    }
+  },
+  "environment": {
+    "python_version": "3.12.7",
+    "packages": {
+      "joblib": "1.6.0",
+      "lightgbm": "4.7.0",
+      "numpy": "2.5.5",
+      "pandas": "3.1.1",
+      "scikit-learn": "1.9.1",
+      "scipy": "1.18.1",
+      "optuna": "5.1.0"
+    }
+  },
+  "feature_generator_reference": {
+    "script": "data_exploration/code/generate_candidate_features.py",
+    "function": "generate_feature_rows(trip_dir, candidate_limit=8, include_label=False)",
+    "cli_command": "python data_exploration/code/generate_candidate_features.py --data-dir data --output-dir full_features --candidate-limit 8 --sample-per-partition 80"
+  }
+}
