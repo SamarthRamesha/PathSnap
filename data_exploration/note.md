@@ -217,3 +217,146 @@ the current CSV and SVG outputs. Folium maps are generated only when Folium is i
 6. Use both measurement distance and transition probability for map matching.
 7. Validate with trip-level cross-validation.
 8. Use the route reference only for permitted training and validation work.
+
+## Viva: quick project explanation
+
+### One-minute summary
+
+We developed a dataset exploration and candidate-feature preparation pipeline for PathSnap.
+The raw dataset contains vehicle GPS trajectories, road-network nodes and arcs, and reference
+routes. We investigated 80 training trips and 10 student-test trips. The pipeline checks data
+quality, timestamps, coordinates, road-network connectivity, route validity, and produces
+candidate features for map matching.
+
+### What each file represents
+
+- `.track`: longitude, latitude, and timestamp for GPS observations.
+- `.nodes`: longitude and latitude for every road-network node.
+- `.arcs`: source node and target node for every directed road segment.
+- `.route`: ordered reference arc IDs traversed by the vehicle.
+
+The `.nodes` row position is the 0-based node ID. The `.arcs` row position is the 0-based arc ID.
+GPS rows are a time series and do not have a direct one-to-one correspondence with arc rows.
+
+### How the system works
+
+1. Load one trip's `.track`, `.nodes`, `.arcs`, and `.route` files.
+2. Validate coordinates and timestamps.
+3. Build directed road arcs from node pairs.
+4. Generate the nearest 8 candidate arcs around each valid GPS point.
+5. Calculate GPS, arc, measurement, and graph-related features.
+6. Add label `1` only for the route-derived true candidate and `0` otherwise.
+7. Keep the feature order fixed for training and API inference.
+
+### Key implementation details
+
+- GPS distance is calculated using the Haversine formula in meters.
+- Segment geometry currently uses a local equirectangular approximation:
+  `x = longitude * 111320 * cos(mean latitude)` and
+  `y = latitude * 111320`.
+- Candidate arcs are spatially indexed using a 0.01-degree grid.
+- Candidates are ranked by perpendicular distance from the GPS point to the arc segment.
+- The fixed candidate limit is 8 in the published sample.
+- `arc_id` is kept only as an identifier and is not used as a numeric model feature.
+
+### Dataset findings
+
+- Training: 80 trips.
+- Student-test: 10 trips.
+- Training median GPS observations: 1,529.
+- Student-test median GPS observations: 1,420.
+- Training median road-network nodes: 9,608.
+- Training median road-network arcs: 19,527.
+- 40 training trips and 2 student-test trips had timestamp or larger-gap warnings.
+- No route arc IDs outside the local `.arcs` range were found.
+- No isolated nodes were found in the available networks.
+- Some road networks contain disconnected components.
+
+### Label methodology
+
+The label comes only from `.route`. It does not come from GPS coordinates alone.
+
+For each point, the implementation:
+
+- takes valid arc IDs from the trip's route;
+- measures each route arc against the GPS point;
+- identifies the nearest route arc as the approximate true arc;
+- labels that candidate `1`;
+- labels all other candidates `0`.
+
+This is a route-based approximation because the raw files do not give a direct GPS-point-to-arc
+mapping. If no route arc is available for a point or trip, a true arc is not invented.
+
+### Bad-point handling
+
+- Malformed GPS rows are skipped.
+- Longitude outside [-180, 180] or latitude outside [-90, 90] is skipped.
+- The first valid point gets a gap and motion feature of zero.
+- Negative or duplicate timestamp gaps remain visible as data-quality features rather than being
+  silently corrected.
+- Invalid timestamp gaps prevent calculating a meaningful speed and set speed to zero.
+- Trip-level warnings are reported separately in the EDA files.
+
+### Candidate miss rate
+
+Candidate miss rate is the percentage of GPS points for which the route-derived true arc is not
+among the generated candidates.
+
+For the 5-trip sample:
+
+- Training miss rate range: 0.0% to 7.35%.
+- Student-test miss rate range: 0.15% to 2.67%.
+- The exact per-trip miss counts are in `candidate_miss_summary.csv`.
+
+The miss rate is a recall-like check for candidate generation. A lower value is better.
+
+### Partition and leakage prevention
+
+- Training data is used for fitting and trip-level cross-validation.
+- Student-test data is used only for development-stage comparison.
+- Evaluator-test data must remain separate.
+- `.route` labels must not be used as model inputs or used to tune student/evaluator predictions.
+- Preprocessing, scaling, and model tuning must be fit within permitted training folds.
+- Splitting must be by `trip_id`, not individual GPS rows.
+
+### API and inference consistency
+
+Samarth's API pipeline will call the same feature-generation logic used in training.
+The feature order is fixed by `FEATURE_COLUMNS`; `arc_id` is an identifier only.
+
+For inference, the model receives the same columns in the same order, the same candidate limit,
+the same coordinate calculations, and the same bad-point rules. The route-based label is not
+available during inference.
+
+### Likely viva questions
+
+**Why not use Euclidean distance in degrees?**
+Longitude and latitude are angular coordinates. Degree differences do not directly represent
+equal physical distances.
+
+**What is map matching?**
+It is the process of matching GPS observations to the road arc or sequence of arcs that most
+likely represents the vehicle's movement.
+
+**Why candidate generation instead of every arc?**
+Some trips have over 300,000 arcs. Generating every possible arc for every GPS point creates an
+extremely large table and is inefficient.
+
+**Why do not use `arc_id` as a feature?**
+Arc IDs are local to each trip and have no shared numeric meaning across trips.
+
+**Why split by trip rather than GPS row?**
+GPS observations from the same trip are strongly correlated. Row-level splitting can leak
+information and produce overly optimistic results.
+
+**How is candidate miss rate calculated?**
+It compares route-derived true arc IDs with the nearest generated candidate arcs.
+
+**What are the main limitations?**
+
+- Route labels are reference information, not guaranteed error-free ground truth.
+- No direct GPS-point-to-arc mapping is provided.
+- Candidate selection is currently an approximate grid implementation.
+- Timestamp gaps and GPS noise remain difficult cases.
+- The local equirectangular CRS is suitable for this prototype, but a formal projected CRS or
+  geodesic method should be considered for final implementation.
