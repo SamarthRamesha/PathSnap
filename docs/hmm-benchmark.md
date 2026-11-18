@@ -21,6 +21,7 @@ git worktree add --detach ../PathSnap-data FETCH_HEAD
 python -m pip install "numpy>=1.26" "folium>=0.16"
 python -m demos.benchmark_trip ../PathSnap-data/data/train/00000039 --output real-trip-00000039.html
 python -m demos.benchmark_trip ../PathSnap-data/data/train/00000010 --output real-trip-00000010.html
+python -m demos.benchmark_trip ../PathSnap-data/data/train/00000001 --repeats 1 --output real-trip-00000001.html
 ```
 
 Open the HTML in a browser with internet access for the basemap and map assets.
@@ -47,10 +48,10 @@ the map.
 | --- | ---: | ---: | ---: | --- | ---: | --- | ---: |
 | [00000039](maps/real-trip-00000039.html) | 363 / 363 | 2,388 | 0.067 s | 0.0254, 0.0258, 0.0461 s | 0.026 s | 1 segment, 172 arcs | 0 |
 | [00000010](maps/real-trip-00000010.html) | 2,711 / 2,711 | 15,715 | 4.125 s | 35.4127, 34.0228, 36.0723 s | 35.413 s | 1 segment, 5,399 arcs | 0 |
+| [00000001](maps/real-trip-00000001.html) | 1,315 / 1,315 | 165,782 | 23.742 s | 157.9182 s | 157.918 s | 1 segment, 557 arcs | 0 |
 
-I stopped the extra stress run on trip `00000001` after about 5 minutes
-28 seconds. The three-run benchmark had yet to produce a timing summary or
-map. That trip has 1,315 GPS rows and 165,790 raw directed arcs. The elapsed
-time is for the unfinished benchmark process, so it does not establish a
-per-run decode time. The 35-second median on the completed larger trip
-already makes decoder latency material for synchronous API requests.
+The stress run on trip `00000001` used a single timed decode. Eight of its
+165,790 raw arcs had zero length and were excluded. The decoder verified
+directed connectivity within the returned segment before rendering the map.
+The 157.9-second decode and 23.7-second preparation were measured locally
+and exclude map generation and HTTP overhead.
