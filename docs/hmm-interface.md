@@ -13,11 +13,13 @@ Training trip `00000001` on `main` contains these whitespace-separated files. Ro
 | .arcs | `0 281` | Directed edge from node 0 to node 281, keyed by row index | 165,790 |
 | .route | `2641` | Ordered reference arc ID | 525 |
 
+All 525 reference arc IDs are in range, and all 524 consecutive pairs connect in the direction of travel. Eight arc records have coincident endpoints. The smoke test omitted those zero-length arcs while retaining the original row IDs for the remaining arcs. The preprocessing adapter still needs to agree on a policy for these records.
+
 The raw files supply the network and observations. Candidate generation produces a small set of projected positions on nearby arcs for each GPS observation. Reference routes are reserved for evaluation and are a different sequence from the per-observation matches.
 
 ## Proposed inputs and outputs
 
-- Pass ordered observations with stable GPS row indices, timestamps in seconds, and GPS coordinates in a common metric projection. Use an empty candidate list for a known missing observation and retain timestamp gaps when observations are absent from the source.
+- Pass ordered observations with stable GPS row indices, timestamps in seconds, and GPS coordinates in a common metric projection. Use an empty candidate list for a known missing observation or set the GPS position to null for an explicitly missing coordinate. Retain timestamp gaps when observations are absent from the source.
 - Pass candidates grouped by observation. Each candidate has a trip-local directed arc ID, offset in meters from the source node, and exactly one of perpendicular distance in meters or a finite model log score. Candidate scores attach to the same GPS row and arc projection that the model scored. The adapter will decide how to transform model outputs after Reyansh confirms their semantics.
 - Pass directed arcs with source and target node IDs and lengths in meters. Use the same length convention for arc lengths and offsets.
 - Return one selected candidate or null per observation, contiguous decoded arc sequences with intermediate network arcs, and break reasons at the corresponding GPS indices. The API can map arc IDs to node geometry for display.
@@ -33,3 +35,15 @@ Use uniform starting weights per segment. Split on empty candidate sets, non-inc
 - Pruthviraj and Raksha should confirm projection, candidate identity, and offset units.
 - Reyansh and Raksha should confirm how scores map back to candidates, their meaning and calibration, and the held-out comparison protocol.
 - Samarth and Raksha should confirm the evaluator request and response formats and obtain the organiser brief or endpoint documentation to establish who provides the evaluator UI.
+
+## Running the prototype
+
+The prototype requires Python 3.10 or newer and uses the standard library. From the repository root, run `python -m unittest discover -s tests -v`.
+
+`hmm.viterbi.decode(observations, arcs)` accepts `Observation`, `Candidate`, and `Arc` instances from the same module. Use `xy_m=None` for an explicitly missing GPS sample. `DecodeResult.matches` preserves input order and uses `None` for unmatched observations. `routes` lists each contiguous sequence in order, and `breaks` gives the GPS index and reason (`missing_gps`, `no_candidates`, `gps_gap`, `non_increasing_time`, or `disconnected`).
+
+The prototype defaults to `sigma_m=15`, `beta_m=30`, and `max_gap_s=30`. Setting `max_gap_s=None` disables the upper time-gap split. These defaults are uncalibrated. A transition search runs from each required start node at each step, so benchmark representative candidate counts and networks before using it in the evaluator.
+
+## Evaluator UI status
+
+The inspected repository branches and public search did not identify an organiser UI, submission spec, or confirmed endpoint. The supplied task assigns Raksha an evaluator-facing view. Confirm with Samarth or the organisers whether this view is a deliverable and which request and response format it should use.
