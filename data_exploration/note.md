@@ -8,14 +8,15 @@ files for every trip. It calculates a per-trip summary and writes team-readable 
 
 The main files created are:
 
-- [`explore_data.py`](./explore_data.py): scans every trip and calculates dataset statistics.
+- [`explore_data.py`](./code/explore_data.py): scans every trip and calculates dataset statistics.
 - [`README.md`](./README.md): explains how to run the exploration.
 - [`DATA_EXPLORATION_REPORT.md`](./output/DATA_EXPLORATION_REPORT.md): summarizes findings.
 - [`per_trip_summary.csv`](./output/per_trip_summary.csv): contains one row of measurements per trip.
 - [`partition_summary.json`](./output/partition_summary.json): contains combined statistics for each partition.
 - [`plots/`](./output/plots): contains histogram SVG files.
-- [`FEATURE_TABLE.md`](./FEATURE_TABLE.md): defines GPS, road-network, candidate, and sequence features for model training.
-- [`feature_catalog.csv`](./feature_catalog.csv): provides the feature list in machine-readable form.
+- [`FEATURE_TABLE.md`](./model_development/FEATURE_TABLE.md): defines GPS, road-network, candidate, and sequence features for model training.
+- [`feature_catalog.csv`](./model_development/feature_catalog.csv): provides the feature list in machine-readable form.
+- [`candidate feature package`](./model_development/candidate_features): contains model-ready samples and miss summaries.
 
 The script was run for the real uploaded data. It found 80 training trips and 10 student-test trips.
 The evaluator-test partition was not present in the working dataset.
@@ -199,7 +200,7 @@ The teams must preserve the separation between partitions:
 Run this command from the repository root:
 
 ```bash
-python3 data_exploration/explore_data.py \
+python3 data_exploration/code/explore_data.py \
   --data-dir data \
   --output-dir data_exploration/output
 ```

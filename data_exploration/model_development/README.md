@@ -6,7 +6,7 @@ one-trip feature-generation function.
 ## Reusable function
 
 ```python
-from data_exploration.generate_candidate_features import generate_feature_rows
+from data_exploration.code.generate_candidate_features import generate_feature_rows
 
 rows, summary = generate_feature_rows(
     Path("data/train/00000001"),
@@ -27,9 +27,9 @@ not as a numeric model feature.
 ## Generate the sample
 
 ```bash
-python3 data_exploration/generate_candidate_features.py \
+python3 data_exploration/code/generate_candidate_features.py \
   --data-dir data \
-  --output-dir data_exploration/output \
+  --output-dir data_exploration/model_development/candidate_features \
   --candidate-limit 8 \
   --sample-per-partition 5
 ```
