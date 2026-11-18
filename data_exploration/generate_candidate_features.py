@@ -372,11 +372,7 @@ def write_summary_csv(path: Path, summaries: list[dict]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=Path, default=Path("data"))
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path("data_exploration/candidate_features"),
-    )
+    parser.add_argument("--output-dir", type=Path, default=Path("data_exploration/output"))
     parser.add_argument("--candidate-limit", type=int, default=8)
     parser.add_argument("--sample-per-partition", type=int, default=5)
     args = parser.parse_args()
@@ -397,9 +393,13 @@ def main() -> None:
             summary["partition"] = partition
             partition_summaries.append(summary)
             all_summaries.append(summary)
-        write_feature_csv(output_dir / f"{partition}_sample.csv", partition_rows)
+        write_feature_csv(output_dir / f"{partition}_candidate_features_sample.csv", partition_rows)
+        write_summary_csv(
+            output_dir / f"{partition}_candidate_miss_sample.csv",
+            partition_summaries,
+        )
 
-    write_summary_csv(output_dir / "miss_summary.csv", all_summaries)
+    write_summary_csv(output_dir / "candidate_miss_summary.csv", all_summaries)
     print(f"Generated sample candidate feature tables with limit={args.candidate_limit}.")
 
 
