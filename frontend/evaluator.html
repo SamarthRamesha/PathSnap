@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PathSnap evaluator</title>
+<style>
+  :root { font-family: system-ui, sans-serif; color: #142233; background: #eef2f6; }
+  main { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { margin: 0 0 1.4rem; }
+  form { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; }
+  select, button { font: inherit; border: 1px solid #7f92a6; padding: .55rem .8rem; border-radius: .4rem; }
+  button { color: white; background: #224d85; }
+  button:disabled { opacity: .55; }
+  canvas { width: 100%; background: white; border: 1px solid #b4c1ce; border-radius: .5rem; }
+  dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .7rem; }
+  dl div { background: white; border-radius: .4rem; padding: .65rem; }
+  dd { font-weight: 700; margin: .25rem 0 0; }
+  .gps { color: #64748b; }
+  .route { color: #1d65b3; }
+</style>
+</head>
+<body>
+<main>
+  <h1>PathSnap evaluator</h1>
+  <form id="form">
+    <label for="trip">Evaluation trip</label>
+    <select id="trip" disabled></select>
+    <button id="predict" disabled>Run prediction</button>
+  </form>
+  <p id="status" role="status">Loading registered trips…</p>
+  <section id="result" hidden>
+    <dl id="metrics"></dl>
+    <canvas id="map" width="900" height="500" aria-label="GPS observations and decoded route segments"></canvas>
+    <p><span class="gps">● GPS observations</span> · <span class="route">━ Decoded route segments</span></p>
+    <p id="breaks"></p>
+  </section>
+</main>
+<script>
+"use strict";
+const select = document.getElementById("trip");
+const button = document.getElementById("predict");
+const statusLabel = document.getElementById("status");
+const result = document.getElementById("result");
+
+async function request(path, options) {
+  const response = await fetch(path, options);
+  const data = await response.json().catch(() => {
+    throw new Error("Open the evaluator from the PathSnap server’s /ui address.");
+  });
+  if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Request failed");
+  return data;
+}
+
+function draw(data) {
+  const canvas = document.getElementById("map");
+  const ctx = canvas.getContext("2d");
+  const points = data.gps_geometry.concat(...data.route_geometry);
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const longitudeScale = Math.cos(data.gps_geometry[0][1] * Math.PI / 180);
+  for (const [lon, lat] of points) {
+    minX = Math.min(minX, lon * longitudeScale);
+    maxX = Math.max(maxX, lon * longitudeScale);
+    minY = Math.min(minY, lat);
+    maxY = Math.max(maxY, lat);
+  }
+  const scale = Math.min(
+    (canvas.width - 48) / Math.max(maxX - minX, 0.000001),
+    (canvas.height - 48) / Math.max(maxY - minY, 0.000001)
+  );
+  const centreX = (maxX + minX) / 2;
+  const centreY = (maxY + minY) / 2;
+  const project = ([lon, lat]) => [
+    canvas.width / 2 + (lon * longitudeScale - centreX) * scale,
+    canvas.height / 2 - (lat - centreY) * scale
+  ];
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#1d65b3";
+  ctx.lineWidth = 4;
+  for (const segment of data.route_geometry) {
+    ctx.beginPath();
+    ctx.moveTo(...project(segment[0]));
+    for (const point of segment.slice(1)) ctx.lineTo(...project(point));
+    ctx.stroke();
+  }
+  ctx.fillStyle = "#64748b";
+  for (const point of data.gps_geometry) {
+    ctx.beginPath();
+    ctx.arc(...project(point), 2.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function render(data) {
+  const records = data.prediction.diagnostics;
+  const items = [
+    ["GPS observations", records.gps_observations],
+    ["Matched", records.matched_observations],
+    ["Unmatched", records.unmatched_observations],
+    ["Route segments", records.route_segments]
+  ];
+  if (data.scores) {
+    items.push(
+      ["Point reference agreement", (100 * data.scores.point_reference_agreement).toFixed(1) + "%"],
+      ["Route arc F1", (100 * data.scores.route_arc_f1).toFixed(1) + "%"]
+    );
+  }
+  document.getElementById("metrics").replaceChildren(...items.map(([label, value]) => {
+    const entry = document.createElement("div");
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = label;
+    description.textContent = value;
+    entry.append(term, description);
+    return entry;
+  }));
+  document.getElementById("breaks").textContent = data.prediction.breaks.length
+    ? "Breaks · " + data.prediction.breaks.map(item => item.gps_index + " " + item.reason).join(", ")
+    : "No route breaks";
+  draw(data);
+  result.hidden = false;
+}
+
+document.getElementById("form").addEventListener("submit", async event => {
+  event.preventDefault();
+  button.disabled = true;
+  result.hidden = true;
+  statusLabel.textContent = "Running prediction…";
+  try {
+    const data = await request("/evaluation/" + encodeURIComponent(select.value), {method: "POST"});
+    render(data);
+    statusLabel.textContent = data.scores ? "Prediction and scoring complete." : "Prediction complete. Reference scores unavailable.";
+  } catch (error) {
+    statusLabel.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+request("/evaluation/trips").then(trips => {
+  for (const id of trips) select.add(new Option(id, id));
+  select.disabled = button.disabled = !trips.length;
+  statusLabel.textContent = trips.length ? "Choose a trip and run prediction." : "No evaluation trips are registered.";
+}).catch(error => { statusLabel.textContent = error.message; });
+</script>
+</body>
+</html>

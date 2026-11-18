@@ -19,6 +19,8 @@ def prepare_trip(trip_dir: Path):
     track = np.loadtxt(stem.with_suffix(".track"), ndmin=2)
     nodes = np.loadtxt(stem.with_suffix(".nodes"), ndmin=2)
     edges = np.loadtxt(stem.with_suffix(".arcs"), dtype=int, ndmin=2)
+    if edges.shape[1] != 2 or np.any((edges < 0) | (edges >= len(nodes))):
+        raise ValueError("Arc rows must have two endpoints that reference valid node IDs")
 
     # Use one local metric frame for GPS points, endpoints, lengths and offsets.
     origin = nodes[0]

@@ -1,0 +1,48 @@
+[
+  {
+    "trip_id": "00000007",
+    "http": 200,
+    "delay_ms_http": 539.85,
+    "prediction": {
+      "gps_observations": 1354,
+      "candidate_rows": 10832,
+      "model_predictions": 10832,
+      "matched_observations": 1354,
+      "unmatched_observations": 0,
+      "route_segments": 1,
+      "zero_length_arcs_excluded": 0,
+      "elapsed_ms": 414.447
+    },
+    "break_reasons": [],
+    "scores": {
+      "point_reference_agreement": 0.8884785819793205,
+      "route_arc_precision": 0.9236641221374046,
+      "route_arc_recall": 0.983739837398374,
+      "route_arc_f1": 0.952755905511811
+    }
+  },
+  {
+    "trip_id": "00000065",
+    "http": 200,
+    "delay_ms_http": 1112.88,
+    "prediction": {
+      "gps_observations": 768,
+      "candidate_rows": 6144,
+      "model_predictions": 6144,
+      "matched_observations": 768,
+      "unmatched_observations": 0,
+      "route_segments": 2,
+      "zero_length_arcs_excluded": 0,
+      "elapsed_ms": 1029.912
+    },
+    "break_reasons": [
+      "gps_gap"
+    ],
+    "scores": {
+      "point_reference_agreement": 0.7513020833333334,
+      "route_arc_precision": 0.6016597510373444,
+      "route_arc_recall": 1.0,
+      "route_arc_f1": 0.7512953367875648
+    }
+  }
+]

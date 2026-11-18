@@ -1,0 +1,6 @@
+# Optional plotting, reports and training.
+-r requirements.txt
+folium>=0.16
+matplotlib>=3.8
+networkx>=3.2
+optuna==5.1.0
