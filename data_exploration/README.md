@@ -12,8 +12,8 @@ data/
 ```
 
 Trip folders should be named with the 8-digit trip ID and contain files with the same stem.
-The expected data is not currently present in this working tree. Restore or download it into `data/`,
-then run the analysis.
+The current working tree contains `train` and `student_test` partitions. Restore or download
+`evaluator_test` files here if evaluator data becomes available, then rerun the analysis.
 
 ## Run the exploration
 

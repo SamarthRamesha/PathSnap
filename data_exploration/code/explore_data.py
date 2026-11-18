@@ -39,6 +39,8 @@ def track_metrics(path: Path) -> dict:
     invalid = 0
     timestamps: list[float] = []
     points: list[tuple[float, float]] = []
+    nonfinite_coordinates = 0
+    nonfinite_timestamps = 0
     malformed = 0
 
     for row in read_rows(path):
@@ -50,6 +52,11 @@ def track_metrics(path: Path) -> dict:
         except ValueError:
             malformed += 1
             continue
+        if not math.isfinite(lon) or not math.isfinite(lat):
+            nonfinite_coordinates += 1
+            invalid += 1
+        if not math.isfinite(timestamp):
+            nonfinite_timestamps += 1
         timestamps.append(timestamp)
         points.append((lon, lat))
         if not (-180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0):
@@ -81,6 +88,8 @@ def track_metrics(path: Path) -> dict:
         "gps_observations": len(points),
         "malformed_track_rows": malformed,
         "invalid_gps_points": invalid,
+        "nonfinite_gps_coordinates": nonfinite_coordinates,
+        "nonfinite_timestamps": nonfinite_timestamps,
         "timestamp_min": min(timestamps) if timestamps else None,
         "timestamp_max": max(timestamps) if timestamps else None,
         "timestamp_backward_steps": backward,
@@ -108,8 +117,23 @@ def network_metrics(nodes_path: Path, arcs_path: Path) -> dict:
     node_count = len(node_rows)
     adjacency: list[list[int]] = [[] for _ in range(node_count)]
     undirected: list[set[int]] = [set() for _ in range(node_count)]
+    valid_node_coordinates = 0
+    invalid_node_coordinates = 0
     valid_arcs = 0
     invalid_arc_endpoints = 0
+
+    for row in node_rows:
+        if len(row) != 2:
+            continue
+        try:
+            lon, lat = map(float, row)
+        except ValueError:
+            invalid_node_coordinates += 1
+            continue
+        if math.isfinite(lon) and math.isfinite(lat) and -180 <= lon <= 180 and -90 <= lat <= 90:
+            valid_node_coordinates += 1
+        else:
+            invalid_node_coordinates += 1
 
     for row in arc_rows:
         if len(row) != 2:
@@ -151,6 +175,8 @@ def network_metrics(nodes_path: Path, arcs_path: Path) -> dict:
         "arc_count": valid_arcs,
         "malformed_node_rows": malformed_nodes,
         "malformed_arc_rows": malformed_arcs,
+        "valid_node_coordinates": valid_node_coordinates,
+        "invalid_node_coordinates": invalid_node_coordinates,
         "invalid_arc_endpoints": invalid_arc_endpoints,
         "isolated_nodes": isolated,
         "weak_component_count": len(component_sizes),
@@ -268,6 +294,8 @@ def summarize_rows(rows: list[dict]) -> dict:
     numeric_fields = [
         "gps_observations", "gap_gt_2s", "gap_gt_10s", "trajectory_length_m",
         "node_count", "arc_count", "isolated_nodes", "weak_component_count",
+        "malformed_track_rows", "invalid_gps_points",
+        "nonfinite_timestamps", "invalid_node_coordinates",
         "route_arc_count", "invalid_route_arc_ids",
     ]
     result = {"trip_count": len(rows)}
@@ -317,6 +345,38 @@ def make_report(output_dir: Path, partition_summaries: dict, inventory: list[dic
         "Row numbers in `.nodes` are 0-based node IDs. Arc row numbers in `.arcs` are 0-based arc IDs.",
         "GPS row order is a time series and must not be assumed to correspond to road-network row order.",
         "",
+        "## Data types and file structure",
+        "",
+        "| File | Rows | Columns | Types | Header |",
+        "|---|---|---:|---|---|",
+        "| `.track` | GPS observations | 3 | float longitude, float latitude, float timestamp | None |",
+        "| `.nodes` | Road-network nodes | 2 | float longitude, float latitude | None |",
+        "| `.arcs` | Road-network arcs | 2 | integer source node ID, integer target node ID | None |",
+        "| `.route` | Reference arc sequence | 1 | integer arc ID | None |",
+        "",
+        "Whitespace is the field delimiter. The script reports malformed rows and rejects invalid numeric",
+        "values before spatial calculations.",
+        "",
+        "## File availability and sizes",
+        "",
+    ])
+    for partition in partition_summaries:
+        part_rows = [row for row in inventory if row["partition"] == partition]
+        track_count = sum(row["track_file_bytes"] > 0 for row in part_rows)
+        nodes_count = sum(row["nodes_file_bytes"] > 0 for row in part_rows)
+        arcs_count = sum(row["arcs_file_bytes"] > 0 for row in part_rows)
+        route_count = sum(row["route_file_bytes"] > 0 for row in part_rows)
+        lines.append(
+            f"- `{partition}`: {len(part_rows)} trip folder(s); "
+            f"track {track_count}, nodes {nodes_count}, arcs {arcs_count}, route {route_count}. "
+            f"Total sizes: track {sum(row['track_file_bytes'] for row in part_rows) / 1_048_576:.2f} MiB, "
+            f"nodes {sum(row['nodes_file_bytes'] for row in part_rows) / 1_048_576:.2f} MiB, "
+            f"arcs {sum(row['arcs_file_bytes'] for row in part_rows) / 1_048_576:.2f} MiB, "
+            f"route {sum(row['route_file_bytes'] for row in part_rows) / 1_048_576:.2f} MiB."
+        )
+
+    lines.extend([
+        "",
         "## Coordinate and timestamp findings",
         "",
         "Coordinate distance is calculated with the haversine formula because ordinary degree-based",
@@ -324,11 +384,14 @@ def make_report(output_dir: Path, partition_summaries: dict, inventory: list[dic
         "observations; a positive gap greater than 2 seconds is flagged.",
         "",
         "See `per_trip_summary.csv` for bounds, observations, gaps, trajectory length, and data-quality flags.",
+        "The `lon_min`, `lon_max`, `lat_min`, and `lat_max` columns give the geographical extent",
+        "of every trip. The combined-coordinate and gap histograms provide aggregate visual evidence.",
+        "A local projected CRS or a geodesic/haversine calculation is preferable to Euclidean degree distance.",
         "",
         "## Road-network findings",
         "",
-        "Each trip is analyzed separately. Undirected connectivity is used to identify isolated nodes",
-        "and disconnected components. Route IDs are checked against the local arc table only.",
+        "Each trip is analyzed separately. Undirected connectivity identifies isolated nodes and weak",
+        "components. Route IDs are checked against the local arc table only.",
         "",
         "## Reference-route limitations",
         "",
@@ -373,6 +436,9 @@ def make_report(output_dir: Path, partition_summaries: dict, inventory: list[dic
             f"- {partition}: {len(anomalous)} trip(s) with timestamp, invalid-coordinate, "
             "or >10-second-gap warnings."
         )
+        if anomalous:
+            trip_ids = ", ".join(row["trip_id"] for row in anomalous)
+            lines.append(f"  - Trip IDs: `{trip_ids}`")
 
     (output_dir / "DATA_EXPLORATION_REPORT.md").write_text(
         "\n".join(lines) + "\n", encoding="utf-8"
@@ -418,6 +484,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=Path, default=Path("data"))
     parser.add_argument("--output-dir", type=Path, default=Path("data_exploration/output"))
+    parser.add_argument("--maps", action="store_true", help="Generate optional Folium HTML maps")
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -429,6 +496,9 @@ def main() -> None:
     inventory: list[dict] = []
     all_points: dict[str, list[tuple[float, float]]] = {}
     partition_rows: dict[str, list[dict]] = {}
+    all_gaps: list[float] = []
+    all_lengths: list[float] = []
+    combined_points: list[tuple[float, float]] = []
 
     partitions = discover_trips(args.data_dir)
     for partition, trips in partitions.items():
@@ -441,6 +511,7 @@ def main() -> None:
 
             track_info = track_metrics(track) if track.exists() else {
                 "gps_observations": 0, "malformed_track_rows": 0, "invalid_gps_points": 0,
+                "nonfinite_gps_coordinates": 0, "nonfinite_timestamps": 0,
                 "gap_gt_10s": 0, "timestamp_backward_steps": 0, "trajectory_length_m": 0,
                 "gap_gt_2s": 0, "gap_median_s": None, "gap_max_s": None,
                 "lon_min": None, "lon_max": None, "lat_min": None, "lat_max": None,
@@ -449,6 +520,7 @@ def main() -> None:
             network_info = network_metrics(nodes_path, arcs_path) if nodes_path.exists() and arcs_path.exists() else {
                 "node_count": 0, "arc_count": 0, "malformed_node_rows": 0,
                 "malformed_arc_rows": 0, "invalid_arc_endpoints": 0,
+                "valid_node_coordinates": 0, "invalid_node_coordinates": 0,
                 "isolated_nodes": 0, "weak_component_count": 0,
                 "largest_component_nodes": 0, "smallest_component_nodes": 0,
                 "mean_degree": 0.0,
@@ -472,6 +544,12 @@ def main() -> None:
             rows.append(row)
             inventory.append(row)
             all_points[f"{partition}/{trip_id}"] = track_info["points"]
+            all_gaps.extend(track_info.get("gaps", []))
+            all_lengths.extend(track_info.get("distances", []))
+            combined_points.extend(
+                point for point in track_info["points"]
+                if math.isfinite(point[0]) and math.isfinite(point[1])
+            )
 
             node_points = []
             if nodes_path.exists():
@@ -481,7 +559,8 @@ def main() -> None:
                             node_points.append((float(node_row[0]), float(node_row[1])))
                         except ValueError:
                             pass
-            folium_map(track_info["points"], node_points, maps_dir / f"{partition}_{trip_id}.html")
+            if args.maps:
+                folium_map(track_info["points"], node_points, maps_dir / f"{partition}_{trip_id}.html")
 
         partition_rows[partition] = rows
 
@@ -498,16 +577,6 @@ def main() -> None:
     make_report(args.output_dir, partition_summaries, inventory)
 
     gps_counts = [row["gps_observations"] for row in inventory]
-    gaps = [gap for row in inventory for gap in all_points.get("", [])]
-    all_gaps = []
-    all_lengths = []
-    for partition, trips in partitions.items():
-        for trip_id, trip_dir in trips:
-            track = trip_dir / f"{trip_id}.track"
-            if track.exists():
-                track_info = track_metrics(track)
-                all_gaps.extend(track_info["gaps"])
-                all_lengths.extend(track_info["distances"])
 
     (plots_dir / "gps_observations_histogram.svg").write_text(
         svg_histogram([float(value) for value in gps_counts], 20, 900, 400,
@@ -517,6 +586,10 @@ def main() -> None:
     (plots_dir / "timestamp_gaps_histogram.svg").write_text(
         svg_histogram([value for value in all_gaps if 0 <= value <= 300], 30, 900, 400,
                       "Timestamp gaps (seconds, clipped at 300 s)"),
+        encoding="utf-8",
+    )
+    (plots_dir / "gps_coordinate_distribution.svg").write_text(
+        svg_scatter(combined_points, 900, 500, "GPS coordinate distribution"),
         encoding="utf-8",
     )
 
