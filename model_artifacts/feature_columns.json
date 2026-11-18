@@ -1,0 +1,15 @@
+[
+  "timestamp_gap_s",
+  "step_distance_m",
+  "point_speed_mps",
+  "heading_deg",
+  "turn_angle_deg",
+  "perpendicular_distance_m",
+  "along_arc_fraction",
+  "arc_length_m",
+  "arc_bearing_deg",
+  "heading_delta_deg",
+  "arc_out_degree",
+  "arc_in_degree",
+  "candidate_rank"
+]
