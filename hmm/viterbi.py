@@ -3,8 +3,8 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from heapq import heappop, heappush
-from math import hypot, inf, isfinite
-from typing import Iterable
+from math import hypot, inf, isfinite, log
+from typing import Iterable, Mapping, Sequence
 
 
 @dataclass(frozen=True)
@@ -24,10 +24,14 @@ class Candidate:
 
 
 @dataclass(frozen=True)
-class Observation:
+class GpsSample:
     gps_index: int
     timestamp_s: float
     xy_m: tuple[float, float] | None
+
+
+@dataclass(frozen=True)
+class Observation(GpsSample):
     candidates: tuple[Candidate, ...] = ()
 
 
@@ -217,3 +221,34 @@ def decode(
         previous = observation
     _finish(last, matches, routes)
     return DecodeResult(tuple(matches), tuple(routes), tuple(breaks))
+
+
+def decode_probabilities(
+    gps_samples: Iterable[GpsSample],
+    probabilities: Iterable[Sequence[tuple[int, float]]],
+    offsets_m: Iterable[Mapping[int, float]],
+    arcs: Iterable[Arc],
+    *,
+    beta_m: float = 30.0,
+    max_gap_s: float | None = 30.0,
+) -> DecodeResult:
+    """Decode model probabilities with one score list and offset map per GPS row."""
+    observations = []
+    for sample, scores, offsets in zip(gps_samples, probabilities, offsets_m, strict=True):
+        if len(scores) > 8:
+            raise ValueError(f"Expected at most eight candidates at GPS row {sample.gps_index}")
+        candidates = []
+        seen = set()
+        for arc_id, probability in scores:
+            if arc_id in seen or not 0 <= probability <= 1:
+                raise ValueError(f"Duplicate arc or invalid probability at GPS row {sample.gps_index}")
+            seen.add(arc_id)
+            if probability == 0 or sample.xy_m is None:
+                continue
+            if arc_id not in offsets:
+                raise ValueError(f"Missing offset for arc {arc_id} at GPS row {sample.gps_index}")
+            candidates.append(Candidate(arc_id, offsets[arc_id], log_score=log(probability)))
+        observations.append(Observation(
+            sample.gps_index, sample.timestamp_s, sample.xy_m, tuple(candidates)
+        ))
+    return decode(observations, arcs, beta_m=beta_m, max_gap_s=max_gap_s)

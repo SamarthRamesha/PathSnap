@@ -47,3 +47,53 @@ The prototype defaults to `sigma_m=15`, `beta_m=30`, and `max_gap_s=30`. Setting
 ## Evaluator UI status
 
 The inspected repository branches and public search did not identify an organiser UI, submission spec, or confirmed endpoint. The supplied task assigns Raksha an evaluator-facing view. Confirm with Samarth or the organisers whether this view is a deliverable and which request and response format it should use.
+
+## FastAPI integration with Reyansh's model
+
+Use the probability adapter for the confirmed model format. Keep all three
+per-observation inputs in the same GPS row order, including rows with empty
+lists, and supply one trip's full directed road network.
+
+```python
+from hmm.viterbi import Arc, GpsSample, decode_probabilities
+
+result = decode_probabilities(
+    gps_samples=[GpsSample(gps_index=42, timestamp_s=4.0, xy_m=(23.0, 0.0))],
+    probabilities=[[(17, 1.0)]],
+    offsets_m=[{17: 23.0}],
+    arcs=[Arc(arc_id=17, source=11, target=12, length_m=40.0)],
+)
+```
+
+- Use at most eight unique arc IDs per score list and probabilities in [0, 1].
+  The adapter takes the natural log of positive scores as supplied, with no
+  normalization requirement. Zero-probability candidates are skipped.
+- For each positive-score candidate with a GPS position, provide its offset
+  in meters from the directed arc's source, in [0, length_m]. The preprocessing
+  layer can reuse the projected position from candidate generation. Set
+  `xy_m=None` for missing GPS and use an empty offset map when none are needed.
+- Include all valid directed arcs, including potential connecting arcs outside
+  the candidate lists. Each arc needs its trip-local ID, source node ID,
+  target node ID, and positive finite length in meters. Keep the arc ID
+  when filtering invalid geometry. Keep a separate arc-to-geometry lookup
+  for rendering routes. Node coordinates are only needed upstream for
+  computing lengths and offsets, or downstream for rendering.
+- Invalid input, such as mismatched row counts, duplicate scores, or missing
+  offsets, raises `ValueError`.
+
+The result is a `DecodeResult` dataclass. For a FastAPI response, use
+`fastapi.encoders.jsonable_encoder(result)`. The example gives:
+
+```json
+{
+  "matches": [{"arc_id": 17, "offset_m": 23.0, "distance_m": null, "log_score": 0.0}],
+  "routes": [[17]],
+  "breaks": []
+}
+```
+
+`matches` has one entry per input GPS row, with `null` for an unmatched row.
+`log_score` is the model's log probability for that candidate. Each array in
+`routes` represents one contiguous decoded segment. A break entry has the
+shape `{"gps_index": 43, "reason": "disconnected"}`. See the prototype section
+above for the full set of reasons.
