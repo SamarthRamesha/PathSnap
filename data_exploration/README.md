@@ -1,58 +1,48 @@
-# PathSnap Data Exploration
+# PathSnap Candidate Features
 
-This folder contains the reproducible dataset inventory and exploration report for the PathSnap project.
+This folder prepares model-ready candidate features. It does not generate plots or report files.
 
-## Dataset layout
+## Files
 
 ```text
-data/
-  train/<trip-id>/<trip-id>.{track,nodes,arcs,route}
-  student_test/<trip-id>/<trip-id>.{track,nodes,arcs,route}
-  evaluator_test/<trip-id>/<trip-id>.{track,nodes,arcs}
+data_exploration/
+  README.md
+  generate_candidate_features.py
+  candidate_features/
+    train_sample.csv
+    student_test_sample.csv
+    miss_summary.csv
+  note.md
 ```
 
-Trip folders should be named with the 8-digit trip ID and contain files with the same stem.
-The expected data is not currently present in this working tree. Restore or download it into `data/`,
-then run the analysis.
-
-## Run the exploration
+## Generate the table
 
 ```bash
-python3 data_exploration/explore_data.py \
+python3 data_exploration/generate_candidate_features.py \
   --data-dir data \
-  --output-dir data_exploration/output
+  --output-dir data_exploration/candidate_features \
+  --candidate-limit 8 \
+  --sample-per-partition 5
 ```
 
-The script is dependency-free and reports:
+The generator is dependency-free and returns one row per GPS point and candidate arc.
+The train and student-test files have the same columns.
 
-- trip and file counts;
-- GPS row counts and malformed/invalid observations;
-- timestamp ordering and sampling gaps;
-- longitude/latitude bounds and geodesic trajectory length;
-- road-network node and arc counts;
-- isolated nodes and disconnected components;
-- route ID validity and route length;
-- SVG histograms;
-- optional per-trip Folium maps when `folium` is installed.
+## Fixed feature order
 
-The complete generated report is written to `data_exploration/output/DATA_EXPLORATION_REPORT.md`.
+`trip_id`, `point_idx`, `arc_id`, `longitude`, `latitude`, `timestamp`,
+`timestamp_gap_s`, `step_distance_m`, `point_speed_mps`, `heading_deg`,
+`turn_angle_deg`, `perpendicular_distance_m`, `along_arc_fraction`,
+`arc_length_m`, `arc_bearing_deg`, `heading_delta_deg`, `arc_out_degree`,
+`arc_in_degree`, `candidate_rank`, `label`.
 
-For model-training work, use [FEATURE_TABLE.md](./FEATURE_TABLE.md) and
-[feature_catalog.csv](./feature_catalog.csv). The table documents raw GPS features,
-road-arc features, candidate-generation features, sequence features, preprocessing,
-and leakage-safe usage for the 80-trip training and 10-trip development partitions.
+`arc_id` identifies the candidate and is not a numeric model feature.
 
-## Partition and leakage rules
+## Data rules
 
-- Train only on `data/train`.
-- Use `data/student_test` only for development-stage model comparison.
-- Never use evaluator-test labels for training, feature selection, or hyperparameter selection.
-- Fit preprocessing and learned transformations using permitted training data only.
-- Do not manually adjust predictions from known evaluation routes or hardcode trip answers.
-
-## Interpretation notes
-
-The supplied route is reference information, not independently verified ground truth.
-GPS points can be noisy or off-road, timestamps can contain gaps, and road arcs are indexed
-independently from GPS rows. Coordinate calculations use haversine distances for a
-physical-distance approximation; a local projected CRS is appropriate for detailed map matching.
+- Use `.route` only to create the training label.
+- Use `label = 1` for the nearest route arc to a GPS point and `0` for other candidates.
+- If no route arc matches, do not invent a label.
+- Do not train or tune on student-test route labels.
+- Split cross-validation by trip ID.
+- Use the same candidate limit and feature function for API inference.
