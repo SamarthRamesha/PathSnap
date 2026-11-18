@@ -1,5 +1,2 @@
-numpy>=1.26
-pandas>=2.2
-matplotlib>=3.8
-networkx>=3.2
-folium>=0.16
+-r requirements-backend.txt
+-r model_artifacts/requirements-model.txt

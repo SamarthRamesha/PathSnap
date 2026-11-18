@@ -18,3 +18,8 @@ __pycache__/
 
 # Temporary files
 model_artifacts_requirements_temp.txt
+
+.venv-demo/
+.env.*
+!.env.example
+*.log

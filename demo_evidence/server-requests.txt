@@ -1,0 +1,21 @@
+PathSnap foreground Uvicorn access log excerpt (client IPs omitted)
+GET /health HTTP/1.1 200 OK
+GET /ready HTTP/1.1 200 OK
+GET /docs HTTP/1.1 200 OK
+GET /ui HTTP/1.1 200 OK
+GET /evaluation/trips HTTP/1.1 200 OK
+POST /evaluation/00000052 HTTP/1.1 200 OK
+POST /predict HTTP/1.1 200 OK
+POST /predict HTTP/1.1 422 Unprocessable Entity
+POST /evaluation/99999999 HTTP/1.1 404 Not Found
+GET /ui HTTP/1.1 200 OK
+GET /evaluation/trips HTTP/1.1 200 OK
+POST /evaluation/00000052 HTTP/1.1 200 OK
+GET /ui HTTP/1.1 200 OK
+GET /evaluation/trips HTTP/1.1 200 OK
+GET /docs HTTP/1.1 200 OK
+GET /ui HTTP/1.1 200 OK
+GET /evaluation/trips HTTP/1.1 200 OK
+POST /evaluation/00000007 HTTP/1.1 200 OK
+POST /evaluation/00000065 HTTP/1.1 200 OK
+POST /evaluation/00000052 HTTP/1.1 200 OK

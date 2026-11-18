@@ -49,3 +49,37 @@ class ProbabilityAdapterTests(unittest.TestCase):
     def test_rejects_misaligned_rows(self):
         with self.assertRaises(ValueError):
             decode_probabilities([GpsSample(1, 0, (0, 0))], [], [{}], [])
+
+    def test_smallest_probabilities_and_eight_candidates_on_a_long_trace(self):
+        tiny = float.fromhex("0x0.0000000000001p-1022")
+        scores = [(arc_id, (2 * tiny if arc_id == 7 else tiny)) for arc_id in range(8)]
+        size = 2000
+        result = decode_probabilities(
+            (GpsSample(index, index, (index, 0)) for index in range(size)),
+            (scores for _ in range(size)),
+            ({arc_id: index for arc_id in range(8)} for index in range(size)),
+            [Arc(arc_id, 2 * arc_id, 2 * arc_id + 1, size) for arc_id in range(8)],
+        )
+        self.assertEqual(result.routes, ((7,),))
+        self.assertEqual(result.breaks, ())
+        self.assertEqual(len(result.matches), size)
+        self.assertTrue(all(match.arc_id == 7 for match in result.matches))
+        self.assertEqual(result.matches[-1].log_score, log(2 * tiny))
+
+    def test_malformed_score_pairs_offsets_and_probability_values(self):
+        sample = GpsSample(0, 0, (0, 0))
+        arcs = [Arc(0, 0, 1, 10)]
+        cases = [
+            (None, {}, "scores must be a sequence"),
+            ([(0,)], {}, "arc ID and probability"),
+            ([(0, "0.5")], {0: 0}, "invalid probability"),
+            ([(0, float("inf"))], {0: 0}, "invalid probability"),
+            ([(0, -0.1)], {0: 0}, "invalid probability"),
+            ([(0.0, 0.5)], {0: 0}, "nonnegative integer"),
+            ([(0, 0.5)], [0], "offsets must be a mapping"),
+            ([(0, 0.5)], {0: float("inf")}, "invalid offset"),
+            ([(1, 0.5)], {1: 0}, "Unknown arc"),
+        ]
+        for scores, offsets, message in cases:
+            with self.subTest(scores=scores, offsets=offsets), self.assertRaisesRegex(ValueError, message):
+                decode_probabilities([sample], [scores], [offsets], arcs)
