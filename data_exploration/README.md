@@ -18,7 +18,7 @@ then run the analysis.
 ## Run the exploration
 
 ```bash
-python3 data_exploration/explore_data.py \
+python3 data_exploration/code/explore_data.py \
   --data-dir data \
   --output-dir data_exploration/output
 ```
@@ -37,8 +37,10 @@ The script is dependency-free and reports:
 
 The complete generated report is written to `data_exploration/output/DATA_EXPLORATION_REPORT.md`.
 
-For model-training work, use [FEATURE_TABLE.md](./FEATURE_TABLE.md) and
-[feature_catalog.csv](./feature_catalog.csv). The table documents raw GPS features,
+For a simple explanation, read [note.md](./note.md).
+
+For model-training work, use [FEATURE_TABLE.md](./model_development/FEATURE_TABLE.md) and
+[feature_catalog.csv](./model_development/feature_catalog.csv). The table documents raw GPS features,
 road-arc features, candidate-generation features, sequence features, preprocessing,
 and leakage-safe usage for the 80-trip training and 10-trip development partitions.
 
@@ -56,3 +58,33 @@ The supplied route is reference information, not independently verified ground t
 GPS points can be noisy or off-road, timestamps can contain gaps, and road arcs are indexed
 independently from GPS rows. Coordinate calculations use haversine distances for a
 physical-distance approximation; a local projected CRS is appropriate for detailed map matching.
+
+## Folder layout
+
+```text
+data_exploration/
+  README.md
+  note.md
+  code/
+    explore_data.py
+    generate_candidate_features.py
+  output/
+    DATA_EXPLORATION_REPORT.md
+    per_trip_summary.csv
+    partition_summary.json
+    plots/
+  model_development/
+    README.md
+    FEATURE_TABLE.md
+    feature_catalog.csv
+    candidate_features/
+      train_candidate_features_sample.csv
+      student_test_candidate_features_sample.csv
+      candidate_miss_summary.csv
+      train_candidate_miss_sample.csv
+      student_test_candidate_miss_sample.csv
+```
+
+`code/` contains the reusable scripts.
+`output/` contains data-exploration reports and plots.
+`model_development/` is the organized handoff for the next model-development step.

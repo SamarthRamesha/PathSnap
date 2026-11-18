@@ -6,7 +6,7 @@ one-trip feature-generation function.
 ## Reusable function
 
 ```python
-from data_exploration.generate_candidate_features import generate_feature_rows
+from data_exploration.code.generate_candidate_features import generate_feature_rows
 
 rows, summary = generate_feature_rows(
     Path("data/train/00000001"),
@@ -24,12 +24,35 @@ rows, summary = generate_feature_rows(
 The fixed feature order is `FEATURE_COLUMNS`. `arc_id` is included only as an identifier,
 not as a numeric model feature.
 
+## Evaluator and inference trips
+
+Use inference mode when `.route` is absent:
+
+```python
+rows, summary = generate_feature_rows(
+    Path("data/evaluator_test/00000000"),
+    candidate_limit=8,
+    include_label=False,
+)
+```
+
+Inference mode does not read `.route`, and it does not return a label column.
+It returns the same 19 model feature columns used by training, after separating the label:
+
+```text
+trip_id, point_idx, arc_id, longitude, latitude, timestamp,
+timestamp_gap_s, step_distance_m, point_speed_mps, heading_deg,
+turn_angle_deg, perpendicular_distance_m, along_arc_fraction,
+arc_length_m, arc_bearing_deg, heading_delta_deg, arc_out_degree,
+arc_in_degree, candidate_rank
+```
+
 ## Generate the sample
 
 ```bash
-python3 data_exploration/generate_candidate_features.py \
+python3 data_exploration/code/generate_candidate_features.py \
   --data-dir data \
-  --output-dir data_exploration/output \
+  --output-dir data_exploration/model_development/candidate_features \
   --candidate-limit 8 \
   --sample-per-partition 5
 ```

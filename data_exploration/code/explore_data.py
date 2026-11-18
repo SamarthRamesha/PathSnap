@@ -349,7 +349,7 @@ def make_report(output_dir: Path, partition_summaries: dict, inventory: list[dic
         "From the repository root:",
         "",
         "```bash",
-        "python3 data_exploration/explore_data.py --data-dir data --output-dir data_exploration/output",
+        "python3 data_exploration/code/explore_data.py --data-dir data --output-dir data_exploration/output",
         "```",
         "",
         "Generated evidence: `per_trip_summary.csv`, `partition_summary.json`, and the visualizations in `plots/`.",
