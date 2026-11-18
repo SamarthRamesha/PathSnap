@@ -14,6 +14,8 @@ The main files created are:
 - [`per_trip_summary.csv`](./output/per_trip_summary.csv): contains one row of measurements per trip.
 - [`partition_summary.json`](./output/partition_summary.json): contains combined statistics for each partition.
 - [`plots/`](./output/plots): contains histogram SVG files.
+- [`FEATURE_TABLE.md`](./FEATURE_TABLE.md): defines GPS, road-network, candidate, and sequence features for model training.
+- [`feature_catalog.csv`](./feature_catalog.csv): provides the feature list in machine-readable form.
 
 The script was run for the real uploaded data. It found 80 training trips and 10 student-test trips.
 The evaluator-test partition was not present in the working dataset.
