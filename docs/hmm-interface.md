@@ -97,3 +97,25 @@ The result is a `DecodeResult` dataclass. For a FastAPI response, use
 `routes` represents one contiguous decoded segment. A break entry has the
 shape `{"gps_index": 43, "reason": "disconnected"}`. See the prototype section
 above for the full set of reasons.
+
+## Independent map demo
+
+From the repository root, install Folium and render the comparison:
+
+```sh
+python -m pip install "folium>=0.16"
+python -m demos.hmm_map --output /tmp/hmm-demo.html
+```
+
+Open the HTML in a browser. The basemap and Folium assets load over the internet.
+The map uses a five-observation synthetic fixture and hand-assigned model
+probabilities. At GPS row 1, the classifier picks disconnected arc 3 with
+probability 0.75. Viterbi picks arc 2 with probability 0.25 and follows the
+network through intermediate arc 1. The 50-second GPS gap appears as a pause
+marker and starts a new route segment.
+
+Both methods use the same candidates and GPS readings. The classifier-only
+baseline selects the highest probability per observation, then applies the
+same routing and gap rules with those choices fixed. The disconnected step
+count excludes the intentional GPS gap. This fixture demonstrates behavior.
+A comparison on held-out trips still needs real model scores.
