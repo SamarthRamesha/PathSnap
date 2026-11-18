@@ -119,3 +119,5 @@ baseline selects the highest probability per observation, then applies the
 same routing and gap rules with those choices fixed. The disconnected step
 count excludes the intentional GPS gap. This fixture demonstrates behavior.
 A comparison on held-out trips still needs real model scores.
+
+For the full training-trip map and timings, see [the real-trip benchmark](hmm-benchmark.md).
