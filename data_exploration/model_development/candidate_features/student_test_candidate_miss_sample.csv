@@ -1,0 +1,6 @@
+partition,trip_id,gps_points_valid,gps_points_with_route_candidate,candidate_miss_count,candidate_miss_rate,candidate_limit,route_arc_count,arc_count
+student_test,00000000,2503,2503,24,0.009588493807431082,8,179,18196
+student_test,00000007,1354,1354,2,0.0014771048744460858,8,123,4369
+student_test,00000009,1049,1049,6,0.005719733079122974,8,429,13104
+student_test,00000040,2995,2995,5,0.001669449081803005,8,309,27026
+student_test,00000052,262,262,7,0.026717557251908396,8,95,3577
