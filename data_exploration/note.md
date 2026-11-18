@@ -6,7 +6,6 @@ The raw dataset contained vehicle GPS trips and their road networks.
 It was not already a table for machine learning. It was several separate text files.
 
 There are 80 training trips and 10 student-test trips.
-The evaluator-test partition was not in the working data.
 
 Every trip has an ID and four file types:
 
@@ -342,6 +341,16 @@ The feature order is fixed by `FEATURE_COLUMNS`; `arc_id` is an identifier only.
 For inference, the model receives the same columns in the same order, the same candidate limit,
 the same coordinate calculations, and the same bad-point rules. The route-based label is not
 available during inference.
+
+Confirmed behavior for evaluator trips:
+
+- `generate_feature_rows(trip_dir, candidate_limit=8, include_label=False)` works when `.route`
+  is missing;
+- inference mode does not read `.route`;
+- it returns the same 19 model feature columns in the same order;
+- it does not create labels or guess ground truth;
+- it uses the same local meter projection and candidate-limit logic as training;
+- `trip_id`, `point_idx`, and `arc_id` remain identifiers and are not label-derived features.
 
 ### Likely viva questions
 

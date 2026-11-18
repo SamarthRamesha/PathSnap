@@ -33,6 +33,8 @@ FEATURE_COLUMNS = [
     "label",
 ]
 
+INFERENCE_FEATURE_COLUMNS = [column for column in FEATURE_COLUMNS if column != "label"]
+
 
 def read_rows(path: Path) -> list[list[str]]:
     rows: list[list[str]] = []
@@ -102,7 +104,7 @@ def grid_cell(lon: float, lat: float, cell_size: float = 0.01) -> tuple[int, int
     return int(math.floor(lon / cell_size)), int(math.floor(lat / cell_size))
 
 
-def load_trip(trip_dir: Path) -> dict:
+def load_trip(trip_dir: Path, include_route: bool = True) -> dict:
     trip_id = trip_dir.name
     track_path = trip_dir / f"{trip_id}.track"
     nodes_path = trip_dir / f"{trip_id}.nodes"
@@ -213,15 +215,16 @@ def load_trip(trip_dir: Path) -> dict:
             grid[cell].append(arc_id)
 
     route_arc_ids: set[int] = set()
-    for row in read_rows(route_path):
-        if len(row) != 1:
-            continue
-        try:
-            arc_id = int(row[0])
-        except ValueError:
-            continue
-        if arc_id in arcs:
-            route_arc_ids.add(arc_id)
+    if include_route:
+        for row in read_rows(route_path):
+            if len(row) != 1:
+                continue
+            try:
+                arc_id = int(row[0])
+            except ValueError:
+                continue
+            if arc_id in arcs:
+                route_arc_ids.add(arc_id)
 
     origin_lat = (
         sum(point["latitude"] for point in points) / len(points)
@@ -272,9 +275,17 @@ def candidate_arcs(trip: dict, point: dict, limit: int = 8) -> list[dict]:
     ]
 
 
-def generate_feature_rows(trip_dir: Path, candidate_limit: int = 8) -> tuple[list[dict], dict]:
-    """Generate one fixed-schema row per valid GPS point and candidate arc."""
-    trip = load_trip(trip_dir)
+def generate_feature_rows(
+    trip_dir: Path,
+    candidate_limit: int = 8,
+    include_label: bool = True,
+) -> tuple[list[dict], dict]:
+    """Generate fixed-schema candidate rows for training or inference.
+
+    When ``include_label`` is false, no route file is read and no label column is
+    returned. This is the inference-safe interface for evaluator trips.
+    """
+    trip = load_trip(trip_dir, include_route=include_label)
     rows: list[dict] = []
     miss_count = 0
     route_candidate_count = 0
@@ -282,7 +293,7 @@ def generate_feature_rows(trip_dir: Path, candidate_limit: int = 8) -> tuple[lis
     for point in trip["points"]:
         candidates = candidate_arcs(trip, point, candidate_limit)
         true_arc_id = None
-        if trip["route_arc_ids"]:
+        if include_label and trip["route_arc_ids"]:
             route_matches = []
             for route_arc_id in trip["route_arc_ids"]:
                 arc = trip["arcs"][route_arc_id]
@@ -324,7 +335,11 @@ def generate_feature_rows(trip_dir: Path, candidate_limit: int = 8) -> tuple[lis
                 "arc_out_degree": trip["out_degree"][arc["from_id"]],
                 "arc_in_degree": trip["in_degree"][arc["to_id"]],
                 "candidate_rank": rank,
-                "label": 1 if arc_id == true_arc_id else 0,
+                **(
+                    {"label": 1 if arc_id == true_arc_id else 0}
+                    if include_label
+                    else {}
+                ),
             }
             rows.append(row)
 
@@ -342,10 +357,11 @@ def generate_feature_rows(trip_dir: Path, candidate_limit: int = 8) -> tuple[lis
     return rows, summary
 
 
-def write_feature_csv(path: Path, rows: list[dict]) -> None:
+def write_feature_csv(path: Path, rows: list[dict], include_label: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = FEATURE_COLUMNS if include_label else INFERENCE_FEATURE_COLUMNS
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=FEATURE_COLUMNS, lineterminator="\n")
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
