@@ -37,6 +37,8 @@ The script is dependency-free and reports:
 
 The complete generated report is written to `data_exploration/output/DATA_EXPLORATION_REPORT.md`.
 
+For a simple explanation, read [note.md](./note.md).
+
 For model-training work, use [FEATURE_TABLE.md](./model_development/FEATURE_TABLE.md) and
 [feature_catalog.csv](./model_development/feature_catalog.csv). The table documents raw GPS features,
 road-arc features, candidate-generation features, sequence features, preprocessing,

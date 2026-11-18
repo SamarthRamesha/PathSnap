@@ -1,223 +1,237 @@
-# PathSnap Data Exploration Note
+# PathSnap Data Exploration - Simple Explanation
 
-## What was done
+## 1. What we started with
 
-The raw PathSnap dataset was investigated and organized into a reproducible exploration workflow.
-A dependency-free Python script was created to read the `.track`, `.nodes`, `.arcs`, and `.route`
-files for every trip. It calculates a per-trip summary and writes team-readable reports and plots.
+The raw dataset contained vehicle GPS trips and their road networks.
+It was not already a table for machine learning. It was several separate text files.
 
-The main files created are:
+There are 80 training trips and 10 student-test trips.
+The evaluator-test partition was not in the working data.
 
-- [`explore_data.py`](./code/explore_data.py): scans every trip and calculates dataset statistics.
-- [`README.md`](./README.md): explains how to run the exploration.
-- [`DATA_EXPLORATION_REPORT.md`](./output/DATA_EXPLORATION_REPORT.md): summarizes findings.
-- [`per_trip_summary.csv`](./output/per_trip_summary.csv): contains one row of measurements per trip.
-- [`partition_summary.json`](./output/partition_summary.json): contains combined statistics for each partition.
-- [`plots/`](./output/plots): contains histogram SVG files.
-- [`FEATURE_TABLE.md`](./model_development/FEATURE_TABLE.md): defines GPS, road-network, candidate, and sequence features for model training.
-- [`feature_catalog.csv`](./model_development/feature_catalog.csv): provides the feature list in machine-readable form.
-- [`candidate feature package`](./model_development/candidate_features): contains model-ready samples and miss summaries.
+Every trip has an ID and four file types:
 
-The script was run for the real uploaded data. It found 80 training trips and 10 student-test trips.
-The evaluator-test partition was not present in the working dataset.
-
-## What the data is
-
-The dataset contains vehicle GPS trajectories and the road network associated with each trip.
-A trip is stored in a folder named with an eight-digit ID, and the files inside use the same ID.
-
-There are four relevant file types:
-
-| File | Meaning | Format |
+| File | Before processing | Meaning |
 |---|---|---|
-| `.track` | GPS observations along a vehicle trajectory | Longitude, latitude, timestamp |
-| `.nodes` | Coordinates of road-network nodes | Longitude, latitude |
-| `.arcs` | Directed connections between road-network nodes | From-node ID, to-node ID |
-| `.route` | Reference sequence of traversed road arcs | One arc ID per row |
+| `.track` | Long table of raw GPS points | Longitude, latitude, timestamp |
+| `.nodes` | Road-network coordinate list | Longitude and latitude for road nodes |
+| `.arcs` | Road-network connection list | Source-node ID and target-node ID |
+| `.route` | List of reference arc IDs | The route recorded as reference information |
 
-Example:
+The original data was not directly arranged as:
 
 ```text
-data/train/00000001/
-  00000001.track
-  00000001.nodes
-  00000001.arcs
-  00000001.route
+trip, GPS point, candidate road arc, label
 ```
 
-The same trip ID connects these four files. However, a row in the track file is not necessarily
-associated with a row having the same index in the road-network files.
+We converted the raw files into candidate feature tables and quality summaries.
 
-## How the files relate
+## 2. How to understand the data
 
-1. The `.nodes` file contains road-network coordinates.
-2. Each row of `.nodes` has a 0-based node ID equal to its line position.
-3. The `.arcs` file contains a directed road segment as a source-node ID and target-node ID pair.
-4. Each row of `.arcs` has a 0-based arc ID equal to its line position.
-5. The `.route` file lists the arc IDs believed to form the vehicle's reference route.
-6. The `.track` file provides the sequence of observed GPS points and timestamps.
+The `.nodes` row number is the node ID.
+The `.arcs` row number is the arc ID.
+The `.route` file gives those arc IDs in sequence.
+The `.track` file gives the GPS observations in time order.
 
-The map-matching problem is to determine which road arc or sequence of arcs best explains each
-GPS trajectory. Arc geometry must be reconstructed from the arc endpoints and node coordinates.
+A GPS row does not directly correspond to an arc row.
+For example, GPS point 1 does not automatically mean arc row 1.
+That is why candidate generation and map matching are needed.
 
-## How data exploration was performed
+## 3. What data exploration did
 
-The exploration followed these steps.
+We did not start training a model. We first understood and checked the data.
 
-### 1. Inventory the partitions
+We:
 
-The script searched `data/train`, `data/student_test`, and `data/evaluator_test`.
-It counted trip folders and checked whether track, node, arc, and route files were available.
-It also recorded file sizes.
+- counted all trips in each partition;
+- counted GPS observations;
+- checked file availability and sizes;
+- checked malformed rows;
+- checked longitude and latitude ranges;
+- checked timestamp gaps and backward timestamps;
+- calculated trajectory distance;
+- counted nodes and arcs;
+- checked arc endpoints;
+- checked isolated nodes and disconnected road-network components;
+- checked that route arc IDs exist in the local arc table;
+- made a report and plots from the results.
 
-### 2. Analyze GPS observations
+The scripts and outputs are organized:
 
-For every `.track` file, the script:
+- `code/explore_data.py`: creates the EDA summary;
+- `code/generate_candidate_features.py`: creates candidate feature tables;
+- `output/`: reports and plots;
+- `model_development/`: files passed to the model team.
 
-- reads longitude, latitude, and timestamp columns;
-- counts observations and malformed rows;
-- checks that coordinates fall within longitude and latitude ranges;
-- calculates gaps between consecutive timestamps;
-- flags backward or duplicate timestamps;
-- calculates the geographic extent of each trajectory;
-- calculates an approximate trajectory length with the haversine distance formula.
+## 4. What we found
 
-Timestamp gaps greater than 2 seconds are flagged. Gaps greater than 10 seconds are highlighted
-as stronger anomalies because they may indicate missing observations or travel interruptions.
+The median training trip has about 1,529 GPS observations.
+The median student-test trip has about 1,420 GPS observations.
 
-### 3. Analyze the road network
+The median training road network has about 9,608 nodes and 19,527 arcs.
+The median student-test road network has about 6,597 nodes and 13,145 arcs.
 
-For every `.nodes` and `.arcs` pair, the script:
+Training GPS observations range from 361 to 19,313.
+Student-test GPS observations range from 262 to 3,958.
 
-- counts nodes and valid arcs;
-- validates arc endpoints against the node range;
-- detects malformed rows;
-- builds an undirected connectivity view;
-- counts isolated nodes;
-- counts disconnected components;
-- reports component sizes and average degree.
+We found:
 
-The connected-component result helps identify whether a trip's road network is a single usable
-network or contains unrelated fragments.
+- 40 training trips and 2 student-test trips with timestamp or large-gap warnings;
+- no isolated nodes in the available networks;
+- disconnected components in some road networks;
+- no invalid route arc IDs in the route files examined;
+- timestamp gaps larger than 2 seconds in many trips;
+- no direct GPS-point-to-route-arc mapping in the raw files.
 
-### 4. Validate reference routes
+Exact trip-by-trip values are in `output/per_trip_summary.csv`.
 
-For every `.route` file, the script:
+## 5. How bad GPS points were handled
 
-- counts the route arc sequence;
-- counts duplicate arc entries;
-- counts unique arc IDs;
-- verifies that every route arc ID exists in the local `.arcs` file.
+The `.track` file is expected to contain longitude, latitude, and timestamp.
 
-It does not assume that route IDs are correct physical ground truth. The route is reference
-information that may contain limitations or errors.
+Our handling is:
 
-### 5. Generate evidence
+- skip malformed rows;
+- skip longitude outside `-180` to `180`;
+- skip latitude outside `-90` to `90`;
+- keep timestamp order;
+- calculate the gap from the previous valid point;
+- mark duplicate or backward timestamps instead of silently changing them;
+- set initial movement features to zero for the first valid point;
+- set speed to zero when timestamp gap is not usable.
 
-The script produces:
+Large gaps are not deleted automatically because they may contain useful evidence about missing
+GPS observations. They are visible in the summary and feature table.
 
-- a summary table in CSV format;
-- JSON statistics grouped by partition;
-- a Markdown report with team-readable findings;
-- SVG histograms for GPS counts and timestamp gaps;
-- optional HTML maps through Folium when Folium is installed.
+## 6. Why candidate features were needed
 
-## What the results show
+The original road networks can contain more than 300,000 arcs.
+If we made a row for every GPS point and every arc, the table would become extremely large.
 
-The actual dataset results are:
+Candidate generation narrows the problem.
 
-| Partition | Trips | Median GPS observations | Median nodes | Median arcs |
-|---|---:|---:|---:|---:|
-| Training | 80 | 1,529 | 9,608 | 19,527 |
-| Student testing | 10 | 1,420 | 6,597 | 13,145 |
+For each GPS point:
 
-Additional observations:
+1. Find the road arcs near the point.
+2. Keep the nearest 8 arcs.
+3. Calculate features for those 8 arcs.
+4. Create one table row for each GPS-point-and-candidate-arc pair.
 
-- 40 training trips and 2 student-test trips have timestamp, invalid-coordinate, or very-large-gap warnings.
-- Training GPS counts range from 361 to 19,313 observations.
-- Student-test GPS counts range from 262 to 3,958 observations.
-- No route arc ID outside the local arc range was found in the available route files.
-- No isolated nodes were found in the available networks.
-- The road networks contain disconnected components in some trips.
+The final table now looks like:
 
-Exact values for every trip are in
-[`per_trip_summary.csv`](./output/per_trip_summary.csv).
-
-## Geographic considerations
-
-Longitude and latitude are angular coordinates, so ordinary Euclidean distance in degrees should
-not be used as a physical distance. This exploration uses the haversine formula to estimate
-distance in meters.
-
-For a map-matching implementation, teams should consider:
-
-- a locally projected coordinate system such as UTM;
-- geodesic or great-circle distance;
-- the local size and location of the trajectory;
-- GPS measurement noise;
-- irregular sampling;
-- large timestamp gaps;
-- observations that do not lie exactly on a road arc.
-
-## Data-quality assumptions and limitations
-
-The following assumptions are used for interpretation:
-
-- `.track` rows are ordered in time.
-- Consecutive timestamps define sampling gaps.
-- `.nodes` row numbers are 0-based node IDs.
-- `.arcs` row numbers are 0-based arc IDs.
-- `.route` values are 0-based arc IDs.
-- A route is useful reference information but is not guaranteed to be error-free.
-
-The supplied data may also have:
-
-- GPS noise;
-- missing observations;
-- irregular timestamps;
-- road-network fragments;
-- GPS points slightly away from roads;
-- routes that cannot be independently verified.
-
-None of these issues should be interpreted as part of a complete ground-truth guarantee.
-
-## Partition and leakage rules
-
-The teams must preserve the separation between partitions:
-
-- use `data/train` for training and permitted development;
-- use `data/student_test` for development-stage evaluation and model comparison;
-- keep evaluator-test data and labels separate;
-- do not use evaluator-test labels for feature selection;
-- do not use evaluator-test results to choose algorithms or hyperparameters;
-- do not manually alter predictions based on known evaluation routes;
-- do not hardcode answers for particular trips;
-- fit preprocessing and learned transformations only with permitted training data;
-- validate models using trip-level splits rather than random mixing of rows from the same trip.
-
-## How to rerun the exploration
-
-Run this command from the repository root:
-
-```bash
-python3 data_exploration/code/explore_data.py \
-  --data-dir data \
-  --output-dir data_exploration/output
+```text
+trip_id, point_idx, arc_id, feature 1, feature 2, ..., label
 ```
 
-The script uses only the Python standard library, so no third-party installation is required for
-the current CSV and SVG outputs. Folium maps are generated only when Folium is installed.
+This format is `one candidate arc per row`.
 
-## Recommended next steps
+## 7. Candidate feature examples
 
-1. Examine trips with more than 10-second gaps.
-2. Inspect coordinate bounds and identify outliers.
-3. Build road-arc geometries from node endpoints.
-4. Project coordinates into an appropriate local system.
-5. Select candidate arcs near each GPS observation.
-6. Use both measurement distance and transition probability for map matching.
-7. Validate with trip-level cross-validation.
-8. Use the route reference only for permitted training and validation work.
+The table includes:
+
+- longitude and latitude;
+- timestamp and timestamp gap;
+- distance traveled between GPS points;
+- GPS speed and heading;
+- turn angle;
+- perpendicular distance from the GPS point to the road arc;
+- position along the arc;
+- arc length and bearing;
+- heading difference;
+- incoming and outgoing arc counts;
+- candidate rank.
+
+`arc_id` is kept as an identifier so the model can trace a prediction.
+It is not used as a numeric model feature because IDs are local to each trip.
+
+The fixed feature order is stored in `FEATURE_TABLE.md` and `feature_catalog.csv`.
+The model pipeline should use the same order for training and API inference.
+
+## 8. How labels were created
+
+The label comes only from `.route`.
+
+For a GPS point:
+
+- find the route arcs from that trip;
+- compare each route arc with the GPS point;
+- choose the nearest route arc as the approximate true arc;
+- set label `1` for that candidate;
+- set label `0` for the other candidates.
+
+This is an approximate label. The raw files do not give a direct mapping from every GPS point to
+its true arc. `.route` is reference information, not guaranteed perfect ground truth.
+
+If no valid route arc exists, no label is invented.
+Candidate miss rate becomes `null` instead of assigning a guessed answer.
+
+## 9. Candidate miss rate
+
+Candidate miss rate tells us how often the approximate true route arc was not among the nearest
+8 candidate arcs.
+
+Lower miss rate is better.
+
+For the 5 training trips in the sample:
+
+- miss rate ranged from 0.0% to 7.35%.
+
+For the 5 student-test trips:
+
+- miss rate ranged from 0.15% to 2.67%.
+
+Exact counts are in `model_development/candidate_features/candidate_miss_summary.csv`.
+
+## 10. Before and after
+
+Before candidate preparation:
+
+- one folder per trip;
+- separate GPS, node, arc, and route files;
+- coordinates and timestamps in raw text;
+- road networks containing many unrelated arcs;
+- no fixed model table;
+- no direct point-to-arc labels.
+
+After data exploration and candidate preparation:
+
+- trips and road networks have been inspected;
+- invalid coordinates and malformed rows are identified;
+- GPS distances and gaps are measured;
+- road networks are checked for connectivity;
+- routes are checked against local arc IDs;
+- one fixed candidate table is available for each partition;
+- one row is produced per `(GPS point, candidate arc)`;
+- route-derived labels are separated from model features;
+- candidate miss rate shows whether candidate generation is good enough.
+
+## 11. Where to find everything
+
+- `code/explore_data.py`: EDA and trip summaries;
+- `code/generate_candidate_features.py`: reusable one-trip candidate generator;
+- `output/`: report, CSV summary, partition JSON, and plots;
+- `model_development/FEATURE_TABLE.md`: feature definitions;
+- `model_development/feature_catalog.csv`: machine-readable feature list;
+- `model_development/candidate_features/`: model-ready sample tables and miss-rate summaries;
+- `model_development/README.md`: detailed candidate-table instructions.
+
+## 12. Important limitations
+
+- GPS points can be noisy or away from roads.
+- Timestamp gaps can affect speed and movement features.
+- Road networks contain disconnected components in some trips.
+- Route reference arcs are not guaranteed to be perfectly correct.
+- The candidate sample uses a local approximate meter projection, not a formal cataloged CRS.
+- Candidate miss rate is approximate with the current spatial grid.
+
+## 13. Rules for model training
+
+- Train learned parameters only on permitted training data.
+- Split by trip ID, not by individual GPS row.
+- Do not use student-test routes for training or tuning.
+- Do not use evaluator-test routes or labels for feature selection.
+- Fit scalers inside each training fold.
+- Keep the feature order fixed.
+- Use the same candidate generator and feature formulas at API inference time.
 
 ## Viva: quick project explanation
 
